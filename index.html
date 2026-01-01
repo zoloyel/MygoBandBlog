@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyGO!!!!! Band Blog</title>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React 和 ReactDOM -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+        }
+    }
+    </script>
+    
+    <!-- 引入 Babel 用于解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* 全局字体引入 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Playfair+Display:ital,wght@0,400;0,900;1,900&display=swap');
+        
+        /* 隐藏默认滚动条但保留功能 (Webkit) */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 音乐列表专用滚动条 */
+        .music-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .music-scrollbar::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 0.5);
+        }
+        .music-scrollbar::-webkit-scrollbar-thumb {
+            background: #4384a6;
+            border-radius: 2px;
+        }
+        .music-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #5aaad4;
+        }
+
+        /* 动画定义 */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes rain { 0% { transform: translateY(-100px); } 100% { transform: translateY(100vh); } }
+        @keyframes float-fade {
+           0% { opacity: 0; transform: translateY(10px) rotate(var(--r, 0deg)); }
+           20% { opacity: 1; transform: translateY(0) rotate(var(--r, 0deg)); }
+           80% { opacity: 1; transform: translateY(-5px) rotate(var(--r, 0deg)); }
+           100% { opacity: 0; transform: translateY(-15px) rotate(var(--r, 0deg)); }
+        }
+        @keyframes morph-clip {
+            0% { clip-path: polygon(10% 0, 100% 0, 80% 100%, 0% 100%); }
+            50% { clip-path: polygon(12% 2%, 98% 0, 82% 98%, 2% 100%); }
+            100% { clip-path: polygon(8% 0, 100% 2%, 78% 100%, 0% 98%); }
+        }
+        @keyframes shimmer {
+            from { transform: translateX(-100%) skewX(-20deg); }
+            to { transform: translateX(200%) skewX(-20deg); }
+        }
+        
+        .animate-spin-slow { animation: spin 10s linear infinite; }
+        .animate-shimmer { animation: shimmer 2s infinite; }
+        
+        .font-serif { font-family: 'Playfair Display', 'Noto Sans JP', serif; }
+        .writing-vertical-rl { writing-mode: vertical-rl; }
+        
+        /* 针对触摸屏设备显示默认光标 */
+        @media (pointer: coarse) {
+            .cursor-none { cursor: auto !important; }
+            .custom-cursor { display: none !important; }
+        }
+
+        /* 自定义滑块样式 (Range Input) */
+        input[type=range] {
+            -webkit-appearance: none; /* Hides the slider so that custom slider can be made */
+            background: transparent; /* Otherwise white in Chrome */
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #4384a6;
+            cursor: pointer;
+            margin-top: -5px; /* You need to specify a margin in Chrome, but in Firefox and IE it is automatic */
+            box-shadow: 0 0 10px rgba(67, 132, 166, 0.8);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 2px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 1px;
+        }
+        
+        input[type=range]:focus {
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-[#1e293b] font-sans overflow-x-hidden cursor-none">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { Play, Pause, SkipForward, Disc, MapPin, Music, Hash, ArrowRight, Zap, Droplets, Mic2, Layers, Radio, Activity } from 'lucide-react';
+
+        // --- Configuration & Data ---
+        const HERO_TEXT_CONFIG = {
+			texts: [
+				"为什么要演奏春日影！", 
+				"我什么都会做的", 
+				"既然这样的话，就让我来结束它", 
+				"我是来结束这个乐队的", 
+				"这个不需要了", 
+				"我想我大概…一辈子也忘不了CRYCHIC", 
+				"组一辈子的乐队", 
+				"好想成为人类", 
+				"主唱太拼命了", 
+				"让我们一起迷失吧！", 
+				"有趣的女人", 
+				"我好想…成为人啊！", 
+				"还真是高高在上呢", 
+				"你这个人，满脑子都想着自己呢", 
+				"过去软弱的我…已经死了", 
+				"祝你幸福", 
+				"我从来不觉得玩乐队开心过", 
+				"歌唱就是我内心的呐喊", 
+				"哈？ 那我呢？"
+			],
+            displayCount: 8,
+            minDuration: 4,
+            maxDuration: 8
+        };
+
+        const MEMBERS = [
+            { 
+                id: 'tomori', name: '高松 灯', role: '主唱', color: '#4384a6', jpName: '高松 燈', 
+                lyricFragment: '一生、離さないから！', trait: '重力', 
+                img: './assets/tomori.png' 
+            },
+            { 
+                id: 'anon', name: '千早 爱音', role: '吉他', color: '#e68ca1', jpName: '千早 愛音', 
+                lyricFragment: '私を見て！', trait: '逃避', 
+                img: './assets/anon.png' 
+            },
+            { 
+                id: 'rana', name: '要 乐奈', role: '吉他', color: '#7dbf6a', jpName: '要 楽奈', 
+                lyricFragment: 'おもしれー女', trait: '本能', 
+                img: './assets/rana.png' 
+            },
+            { 
+                id: 'soyo', name: '长崎 素世', role: '贝斯', color: '#d9b552', jpName: '長崎 そよ', 
+                lyricFragment: '終わらせたくない...', trait: '执念', 
+                img: './assets/soyo.png' 
+            },
+            { 
+                id: 'taki', name: '椎名 立希', role: '鼓手', color: '#6a6da8', jpName: '椎名 立希', 
+                lyricFragment: '燈の歌を、私が支える', trait: '焦燥', 
+                img: './assets/taki.png' 
+            }
+        ];
+
+        // 🔧 【自定义修改指南】：在 src 属性中填入 mp3 文件路径
+        const SONGS = [
+            { id: 1, title: "迷星叫", duration: "4:12", album:"专辑：迷跡波", src: "./assets/mayoi_uta.mp3" },
+            { id: 2, title: "碧天伴走", duration: "3:45", album:"专辑：迷跡波", src: "./assets/hekitenbansou.mp3" },
+            { id: 3, title: "春日影", duration: "4:01", album:"专辑：迷跡波", src: "./assets/haruhikage.mp3" },
+            { id: 4, title: "诗超绊", duration: "3:55", album:"专辑：迷跡波", src: "./assets/utakotoba.mp3" },
+            { id: 5, title: "壱雫空", duration: "3:40", album:"专辑：迷跡波", src: "./assets/hitoshizuku.mp3" }
+        ];
+
+        // --- Utility Components ---
+        const DynamicLayeredText = ({ text, mousePos, className, type = 'glitch' }) => {
+            const x = mousePos?.x || 0;
+            const y = mousePos?.y || 0;
+            const winW = typeof window !== 'undefined' ? window.innerWidth : 1000;
+            const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
+            
+            const relX = (x - winW / 2);
+            const relY = (y - winH / 2);
+
+            const isGradient = type === 'gradient';
+
+            const layers = isGradient ? [
+                { color: 'text-[#4384a6]/20', blur: 'blur-[8px]', factor: -0.02, z: -10 },
+                { color: 'text-slate-400/30', blur: 'blur-[4px]', factor: 0.03, z: -20 },
+                { color: 'text-[#4384a6]/10', blur: 'blur-[12px]', factor: 0.06, z: -30 },
+                { color: 'text-slate-800/10', blur: 'blur-[2px]', factor: -0.04, z: -40 },
+            ] : [
+                { color: 'text-cyan-500/40', blur: 'blur-[1px]', factor: -0.03, z: -10 },
+                { color: 'text-fuchsia-500/40', blur: 'blur-[1px]', factor: 0.03, z: -20 },
+                { color: 'text-[#4384a6]/30', blur: 'blur-[2px]', factor: 0.05, z: -30 },
+                { color: 'text-slate-800/10', blur: 'blur-[0px]', factor: -0.01, z: -40 },
+                { color: 'text-white/40', blur: 'blur-[4px]', factor: 0.08, z: 10 },
+            ];
+
+            return (
+                <div className={`relative inline-block p-12 -m-12 select-none ${className}`}>
+                {layers.map((layer, i) => (
+                    <span 
+                    key={i}
+                    className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-transform duration-100 ease-out
+                        ${layer.color} ${layer.blur} ${isGradient ? 'mix-blend-multiply italic' : 'mix-blend-darken'}`}
+                    style={{ 
+                        transform: `translate(${relX * layer.factor}px, ${relY * layer.factor}px)`,
+                        zIndex: layer.z
+                    }}
+                    >
+                    {text}
+                    </span>
+                ))}
+                <span className={`relative z-20 block leading-relaxed ${isGradient ? 'text-transparent bg-clip-text bg-gradient-to-r from-[#4384a6] to-slate-800 italic p-4 pb-12 pr-12 -mr-12 -mb-8' : 'text-slate-900 mix-blend-darken'}`}>
+                    {text}
+                </span>
+                </div>
+            );
+        };
+
+        const Bandage = ({ className, rotation = '2deg', width = '120px' }) => (
+            <div 
+                className={`absolute h-10 bg-[#f4f1ea] shadow-[2px_2px_5px_rgba(0,0,0,0.1)] flex items-center justify-center ${className}`}
+                style={{ 
+                transform: `rotate(${rotation})`,
+                width: width,
+                backgroundImage: 'radial-gradient(#cbd5e1 15%, transparent 16%)', 
+                backgroundSize: '6px 6px',
+                borderLeft: '2px solid rgba(0,0,0,0.05)',
+                borderRight: '2px solid rgba(0,0,0,0.05)'
+                }}
+            >
+                <div className="w-[70%] h-[50%] bg-[#fdfcf8] opacity-90 shadow-inner" /> 
+            </div>
+        );
+
+        const AudioVisualizer = ({ isPlaying }) => (
+            <div className="flex items-end justify-center gap-[3px] h-12 w-full">
+                {[...Array(20)].map((_, i) => (
+                <div 
+                    key={i}
+                    className={`w-1 bg-[#4384a6] transition-all duration-100 rounded-t-sm ${isPlaying ? 'animate-pulse' : 'h-1'}`}
+                    style={{
+                    height: isPlaying ? `${Math.random() * 80 + 20}%` : '5%',
+                    opacity: 0.8,
+                    animationDelay: `${i * 0.05}s`,
+                    animationDuration: '0.4s'
+                    }}
+                />
+                ))}
+            </div>
+        );
+
+        const RainCanvas = () => (
+            <div className="fixed inset-0 pointer-events-none z-0 opacity-20 overflow-hidden">
+                {[...Array(20)].map((_, i) => (
+                    <div 
+                    key={i}
+                    className="absolute bg-slate-400 w-[1px]"
+                    style={{
+                        height: Math.random() * 50 + 20 + 'px',
+                        left: Math.random() * 100 + '%',
+                        top: Math.random() * 100 + '%',
+                        opacity: Math.random(),
+                        animation: `rain ${Math.random() * 1 + 0.5}s linear infinite`
+                    }}
+                    />
+                ))}
+            </div>
+        );
+
+        const CustomCursor = ({ mousePos, isHovering }) => (
+            <div
+                className="custom-cursor fixed pointer-events-none z-[100] hidden md:block mix-blend-difference"
+                style={{
+                left: mousePos.x,
+                top: mousePos.y,
+                transform: 'translate(-50%, -50%)',
+                }}
+            >
+                <div
+                className={`border-[1.5px] border-white transition-all duration-200 ease-out flex items-center justify-center
+                    ${isHovering ? 'w-12 h-12 rotate-45 bg-white' : 'w-6 h-6 rotate-0'}
+                `}
+                />
+                <div className={`absolute w-full h-[1px] bg-white transition-all duration-300 ${isHovering ? 'scale-150' : 'scale-0'}`} />
+                <div className={`absolute h-full w-[1px] bg-white transition-all duration-300 ${isHovering ? 'scale-150' : 'scale-0'}`} />
+            </div>
+        );
+
+        // --- Sections ---
+        const AutoFloatingFragments = () => {
+            const fragments = useMemo(() => {
+                const shuffled = [...HERO_TEXT_CONFIG.texts].sort(() => 0.5 - Math.random());
+                const selected = shuffled.slice(0, HERO_TEXT_CONFIG.displayCount);
+                return selected.map((text, i) => ({
+                    text,
+                    top: `${Math.random() * 70 + 10}%`,
+                    left: `${Math.random() * 70 + 10}%`,
+                    rotation: Math.random() * 20 - 10,
+                    duration: Math.random() * (HERO_TEXT_CONFIG.maxDuration - HERO_TEXT_CONFIG.minDuration) + HERO_TEXT_CONFIG.minDuration,
+                    delay: Math.random() * 5
+                }));
+            }, []);
+
+            return (
+                <>
+                {fragments.map((frag, i) => (
+                    <div 
+                    key={i}
+                    className="absolute font-serif italic font-bold text-slate-800 bg-white/90 backdrop-blur-sm px-2 py-1 shadow-sm border border-slate-200/50 pointer-events-none select-none z-20"
+                    style={{
+                        top: frag.top,
+                        left: frag.left,
+                        transform: `rotate(${frag.rotation}deg)`,
+                        opacity: 0, 
+                        animation: `float-fade ${frag.duration}s ease-in-out infinite`,
+                        animationDelay: `${frag.delay}s`
+                    }}
+                    >
+                    {frag.text}
+                    </div>
+                ))}
+                </>
+            );
+        };
+
+        const HeroSection = ({ mousePos, onStartListening }) => {
+            return (
+                <div id="home" className="min-h-screen relative flex items-center justify-center overflow-hidden bg-slate-50">
+                <div className="absolute inset-0 z-0 opacity-[0.03] overflow-hidden select-none pointer-events-none">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                        <div key={i} className="whitespace-nowrap text-[12vw] font-black leading-none italic font-serif" 
+                            style={{ transform: `translateX(${(i % 2 === 0 ? -1 : 1) * mousePos.x * 0.05}px)` }}>
+                            MYGO!!!!! MYGO!!!!! MYGO!!!!!
+                        </div>
+                    ))}
+                </div>
+
+                <div className="relative z-10 w-full max-w-7xl px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                    <div className="col-span-1 lg:col-span-7 relative">
+                    <Bandage className="-top-12 -left-10 rotate-[-12deg]" width="180px" />
+                    
+                    <h1 className="text-8xl md:text-[10rem] font-black leading-normal tracking-tighter text-slate-900"> 
+                        <DynamicLayeredText text="迷失" mousePos={mousePos} type="glitch" className="block" />
+                        <div className="-mt-16 md:-mt-24 ml-24 md:ml-48 relative z-20">
+                        <DynamicLayeredText text="前行" mousePos={mousePos} type="gradient" className="font-serif" />
+                        </div>
+                    </h1>
+                    
+                    <div className="mt-8 flex flex-col gap-4 border-l-4 border-[#4384a6] pl-6 ml-2 relative z-30">
+                        <p className="text-xl md:text-2xl font-bold text-slate-700 max-w-lg font-serif">「一緒に...迷子になろう!」</p>
+                        <p className="text-slate-500 max-w-md text-sm leading-relaxed">
+                        我们是迷路的孩子，是满身伤痕的野猫。<br/>
+                        但在那苍蓝色的灯光下，我们找到了呐喊的理由。<br/>
+                        <span className="text-xs opacity-70 mt-2 block">迷子でもいい、迷子でも進め。</span>
+                        </p>
+                    </div>
+
+                    <div className="mt-12 flex items-center gap-6 relative z-30">
+                        <button 
+                            onClick={onStartListening}
+                            className="relative px-8 py-3 bg-[#1e293b] text-white font-bold tracking-widest overflow-hidden group active:scale-95 transition-transform duration-100"
+                        >
+                            <span className="relative z-10 flex items-center gap-2">试听开始 <Play size={14} fill="white"/></span>
+                            <div className="absolute inset-0 bg-[#4384a6] transform -translate-x-full skew-x-12 group-hover:translate-x-0 transition-transform duration-300 ease-out" />
+                        </button>
+                        <span className="font-mono text-xs text-slate-400 tracking-widest">坐标：不明</span>
+                    </div>
+                    </div>
+
+                    <div className="col-span-1 lg:col-span-5 relative h-[500px] hidden lg:block perspective-1000">
+                        <div 
+                            className="absolute inset-0 backdrop-blur-3xl bg-gradient-to-br from-[#4384a6]/60 via-slate-400/10 to-white/40 border-2 border-white/80 shadow-[0_8px_40px_rgba(30,41,59,0.3),inset_0_0_20px_rgba(255,255,255,0.5)] transition-all duration-75 overflow-hidden z-10"
+                            style={{ 
+                                animation: 'morph-clip 6s ease-in-out infinite alternate',
+                                transform: `rotateY(${mousePos.x * 0.01}deg) translateZ(10px)`
+                            }}
+                        >
+                            <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent w-[200%] h-full animate-shimmer pointer-events-none mix-blend-overlay" />
+                        </div>
+                        <div className="absolute top-10 right-10 w-full h-full border border-slate-300/60 z-0" style={{ transform: `translate(${mousePos.x * -0.02}px, ${mousePos.y * -0.02}px)` }}></div>
+                        <AutoFloatingFragments />
+                        <div className="absolute bottom-0 right-0 p-4 bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl max-w-[200px] z-30">
+                            <p className="text-[10px] font-mono leading-tight text-slate-400">
+                                系统状态: <span className="text-[#4384a6]">临界 (CRITICAL)</span><br/>
+                                同步率: 100%<br/>
+                                地点: RiNG
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            );
+        };
+
+        const MemberStrip = ({ member, isActive, onClick }) => (
+            <div 
+                onClick={onClick}
+                className={`relative cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden border-r border-slate-200 group
+                ${isActive ? 'flex-[3]' : 'flex-[1] hover:flex-[1.2]'}
+                `}
+            >
+                <div className="absolute inset-0 bg-slate-200">
+                <img src={member.img} alt={member.name} className={`w-full h-full object-cover transition-all duration-700 ${isActive ? 'grayscale-0 scale-105' : 'grayscale scale-100 opacity-50'}`} />
+                <div className={`absolute inset-0 bg-slate-900/20 transition-opacity duration-500 ${isActive ? 'opacity-0' : 'opacity-40'}`} />
+                <div className="absolute inset-0 opacity-40 mix-blend-overlay" style={{ backgroundColor: member.color }} />
+                </div>
+                <div className={`absolute bottom-0 left-0 w-full p-8 bg-gradient-to-t from-slate-900/90 to-transparent text-white transition-all duration-500 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
+                    <div className="mb-3">
+                        <div className="flex items-baseline gap-3">
+                            <h2 className="text-4xl md:text-6xl font-black italic font-serif leading-none" style={{ textShadow: `2px 2px 0px ${member.color}` }}>{member.name}</h2>
+                            <span className="font-mono text-[#4384a6] text-xl">0{MEMBERS.indexOf(member) + 1}</span>
+                        </div>
+                        <p className="text-sm font-bold opacity-60 tracking-widest mt-1 ml-1">{member.jpName}</p>
+                    </div>
+                    <div className="h-[1px] w-full bg-white/30 mb-4" />
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <p className="text-sm font-bold tracking-widest mb-1 text-[#4384a6]">{member.role} // {member.trait}</p>
+                            <p className="text-lg font-serif italic opacity-90">"{member.lyricFragment}"</p>
+                        </div>
+                        <Zap className="text-[#4384a6]" />
+                    </div>
+                </div>
+            </div>
+        );
+
+        const MembersSection = () => {
+            const [activeId, setActiveId] = useState('tomori');
+            return (
+                <div id="members" className="h-[80vh] w-full flex flex-col md:flex-row bg-slate-900 relative">
+                <div className="absolute inset-0 opacity-10 pointer-events-none z-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+                {MEMBERS.map(member => (
+                    <MemberStrip key={member.id} member={member} isActive={activeId === member.id} onClick={() => setActiveId(member.id)} />
+                ))}
+                </div>
+            );
+        };
+
+        const DiaryCard = ({ entry, index }) => (
+            <div className="relative group perspective-1000">
+                <div className="relative bg-white p-6 shadow-md border border-slate-200 min-h-[280px] flex flex-col transform transition-transform duration-300 group-hover:-translate-y-2 group-hover:rotate-1">
+                    <div className="absolute -top-3 left-0 right-0 h-4 bg-white" style={{ clipPath: 'polygon(0% 100%, 5% 0%, 10% 100%, 15% 0%, 20% 100%, 25% 0%, 30% 100%, 35% 0%, 40% 100%, 45% 0%, 50% 100%, 55% 0%, 60% 100%, 65% 0%, 70% 100%, 75% 0%, 80% 100%, 85% 0%, 90% 100%, 95% 0%, 100% 100%)' }}></div>
+                    <Bandage className="-top-4 left-1/2 -translate-x-1/2" width="100px" rotation={index % 2 === 0 ? '-2deg' : '3deg'} />
+                    <div className="mt-4 mb-4 border-b-2 border-slate-100 pb-2 flex justify-between items-baseline">
+                        <span className="text-4xl font-black text-slate-200 group-hover:text-[#4384a6] transition-colors">{entry.date}</span>
+                        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#4384a6] animate-pulse" /><span className="text-xs font-bold uppercase tracking-wider">{entry.author}</span></div>
+                    </div>
+                    <h3 className="text-lg font-bold mb-2 leading-tight">{entry.title}</h3>
+                    <p className="text-sm font-serif text-slate-600 flex-grow italic leading-relaxed whitespace-pre-line">"{entry.content}"</p>
+                    <div className="mt-4 pt-4 border-t border-dashed border-slate-200">
+                        <div className="flex gap-2 text-[10px] font-mono text-slate-400">{entry.tags.map(t => <span key={t}>#{t}</span>)}</div>
+                    </div>
+                </div>
+                <div className="absolute inset-0 bg-slate-800 -z-10 translate-x-2 translate-y-2 opacity-0 group-hover:opacity-10 transition-opacity" />
+            </div>
+        );
+
+        const DiarySection = () => {
+            const logs = [
+                { id: 1, date: "08.15", author: "Tomori", title: "集めた石", content: "今天捡到了一块棱角分明的石头。\n握着手心很痛，\n但我不想放手。", tags: ["随笔", "备忘"] },
+                { id: 2, date: "08.18", author: "Taki", title: "練習室記録", content: "灯的歌声在颤抖。\n我必须更好地支撑她。\n绝不让任何人嘲笑我们。", tags: ["记录", "RiNG"] },
+                { id: 3, date: "08.20", author: "Anon", title: "新衣装！", content: "这样看起来有乐队感了吗？\n加了一些可爱的徽章。\n希望大家喜欢！", tags: ["穿搭", "氛围"] },
+            ];
+            return (
+                <div id="diary" className="py-24 bg-[#f8fafc] border-t border-slate-200 relative overflow-hidden">
+                    <div className="absolute top-20 right-[-10%] text-[200px] font-black text-slate-100 rotate-[-10deg] select-none">DIARY</div>
+                    <div className="max-w-6xl mx-auto px-6 relative z-10">
+                        <div className="mb-16 flex items-center gap-4"><Layers className="text-[#4384a6]" /><h2 className="text-3xl font-bold tracking-tighter">散落的记录 (SCATTERED_LOGS)</h2></div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">{logs.map((log, i) => <DiaryCard key={log.id} entry={log} index={i} />)}</div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MusicSection = ({ isPlaying, setIsPlaying, currentTrack, setCurrentTrack, currentTime, duration, onSeek }) => {
+            const activeSong = SONGS.find(s => s.id === currentTrack);
+            
+            // 格式化时间函数
+            const formatTime = (time) => {
+                if (isNaN(time)) return "00:00";
+                const minutes = Math.floor(time / 60);
+                const seconds = Math.floor(time % 60);
+                return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            };
+
+            return (
+                <div id="music" className="min-h-[80vh] bg-[#1e293b] text-white py-24 px-6 relative overflow-hidden flex items-center">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#4384a6] opacity-10 blur-[100px] rounded-full pointer-events-none" />
+                    <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: `linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)`, backgroundSize: '40px 40px' }} />
+                    <div className="max-w-6xl mx-auto w-full z-10">
+                        <div className="mb-12 flex items-center gap-3"><Radio className="text-[#4384a6] animate-pulse" /><h2 className="text-3xl font-bold tracking-widest">声音档案库 (AUDIO_ARCHIVE)</h2></div>
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-sm overflow-hidden shadow-2xl">
+                            <div className="col-span-1 lg:col-span-5 bg-slate-900 p-8 flex flex-col justify-between border-r border-slate-700 relative overflow-hidden">
+                                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 mb-8"><span>设备状态: 在线</span><span>输出: 100%</span></div>
+                                <div className="flex-1 flex items-center justify-center relative my-8">
+                                    <div className="w-full"><AudioVisualizer isPlaying={isPlaying} /><AudioVisualizer isPlaying={isPlaying} /></div>
+                                    <div className="absolute inset-0 flex items-center justify-center"><h2 className="text-4xl md:text-5xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500 tracking-tighter text-center p-4 pb-6 leading-relaxed">{activeSong?.title}</h2></div>
+                                </div>
+                                <div className="space-y-4">
+                                    {/* 替换原本的装饰性 div 为 range input */}
+                                    <input 
+                                        type="range" 
+                                        min="0" 
+                                        max={duration || 0} 
+                                        value={currentTime} 
+                                        onChange={onSeek}
+                                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <div className="flex justify-between items-center font-mono text-xs"><span className="text-[#4384a6]">{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                                </div>
+                                <Mic2 className="absolute bottom-[-20px] right-[-20px] w-40 h-40 text-white opacity-[0.02]" />
+                            </div>
+                            <div className="col-span-1 lg:col-span-7 p-0 flex flex-col">
+                                <div className="p-4 bg-slate-800/80 border-b border-slate-700 flex justify-between items-center"><span className="font-bold text-sm tracking-wider">播放列表</span><span className="text-[10px] font-mono bg-[#4384a6] text-white px-2 py-1 rounded-sm">共 {SONGS.length} 首</span></div>
+                                <div className="flex-1 overflow-y-auto max-h-[400px] music-scrollbar">
+                                    {SONGS.map((song, i) => (
+                                        <div key={song.id} onClick={() => { setCurrentTrack(song.id); setIsPlaying(true); }} className={`group flex items-center justify-between p-6 border-b border-slate-700/50 cursor-pointer transition-all hover:bg-white/5 ${currentTrack === song.id ? 'bg-[#4384a6]/10 border-l-4 border-l-[#4384a6]' : 'border-l-4 border-l-transparent'}`}>
+                                            <div className="flex items-center gap-6"><span className={`font-mono text-lg ${currentTrack === song.id ? 'text-[#4384a6]' : 'text-slate-600'}`}>0{song.id}</span><div><p className={`text-lg font-bold group-hover:text-[#4384a6] transition-colors ${currentTrack === song.id ? 'text-white' : 'text-slate-300'}`}>{song.title}</p><p className="text-xs text-slate-500 mt-1 font-mono">{song.album}</p></div></div>
+                                            {currentTrack === song.id && isPlaying ? <Activity size={20} className="text-[#4384a6] animate-pulse" /> : <Play size={16} className="text-slate-600 group-hover:text-white" />}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+            const [isHovering, setIsHovering] = useState(false);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [currentTrack, setCurrentTrack] = useState(1);
+            
+            // 音频播放相关状态
+            const [currentTime, setCurrentTime] = useState(0);
+            const [duration, setDuration] = useState(0);
+            const audioRef = useRef(typeof Audio !== "undefined" ? new Audio() : null);
+
+            const scrollToSection = (id) => {
+                const element = document.getElementById(id);
+                if (element) element.scrollIntoView({ behavior: 'smooth' });
+            };
+
+            const handleSeek = (e) => {
+                const newTime = parseFloat(e.target.value);
+                if (audioRef.current) {
+                    audioRef.current.currentTime = newTime;
+                    setCurrentTime(newTime);
+                }
+            };
+
+            useEffect(() => {
+                const handleMouseMove = (e) => {
+                    requestAnimationFrame(() => setMousePos({ x: e.clientX, y: e.clientY }));
+                };
+                window.addEventListener('mousemove', handleMouseMove);
+                return () => window.removeEventListener('mousemove', handleMouseMove);
+            }, []);
+
+            // 监听播放状态、曲目变化及时间更新
+            useEffect(() => {
+                const audio = audioRef.current;
+                if (!audio) return;
+
+                const track = SONGS.find(s => s.id === currentTrack);
+                
+                // 如果当前音频源和选中歌曲不一致，则切换源
+                if (track && track.src && !audio.src.includes(track.src)) {
+                    audio.src = track.src;
+                }
+
+                if (isPlaying) {
+                    // 简单的错误处理
+                    audio.play().catch(e => {
+                        console.log("播放失败，可能是需要用户交互或文件不存在:", e);
+                    });
+                } else {
+                    audio.pause();
+                }
+
+                // 事件监听：更新时间、时长和结束处理
+                const updateTime = () => setCurrentTime(audio.currentTime);
+                const updateDuration = () => setDuration(audio.duration);
+                const handleEnded = () => setIsPlaying(false);
+
+                audio.addEventListener('timeupdate', updateTime);
+                audio.addEventListener('loadedmetadata', updateDuration);
+                audio.addEventListener('ended', handleEnded);
+
+                return () => {
+                    audio.removeEventListener('timeupdate', updateTime);
+                    audio.removeEventListener('loadedmetadata', updateDuration);
+                    audio.removeEventListener('ended', handleEnded);
+                };
+            }, [currentTrack, isPlaying]);
+
+            return (
+                <div>
+                    <CustomCursor mousePos={mousePos} isHovering={isHovering} />
+                    <RainCanvas />
+                    <nav className="fixed top-0 w-full z-50 flex justify-between items-center px-8 py-6 mix-blend-difference text-white">
+                        <div className="text-2xl font-black italic tracking-tighter cursor-pointer" onClick={() => scrollToSection('home')}>MyGO!!!!!</div>
+                        <div className="flex gap-6 font-mono text-xs tracking-widest">
+                            <span onClick={() => scrollToSection('home')} className="cursor-pointer hover:text-[#4384a6] transition-colors">HOME</span>
+                            <span onClick={() => scrollToSection('members')} className="cursor-pointer hover:text-[#4384a6] transition-colors">MEMBER</span>
+                            <span onClick={() => scrollToSection('diary')} className="cursor-pointer hover:text-[#4384a6] transition-colors">DIARY</span>
+                            <span onClick={() => scrollToSection('music')} className="cursor-pointer hover:text-[#4384a6] transition-colors">MUSIC</span>
+                        </div>
+                    </nav>
+                    <main>
+                        <HeroSection mousePos={mousePos} onStartListening={() => setIsPlaying(true)} />
+                        <MembersSection />
+                        <DiarySection />
+                        <MusicSection 
+                            isPlaying={isPlaying} 
+                            setIsPlaying={setIsPlaying} 
+                            currentTrack={currentTrack} 
+                            setCurrentTrack={setCurrentTrack} 
+                            currentTime={currentTime}
+                            duration={duration}
+                            onSeek={handleSeek}
+                        />
+                    </main>
+                    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md text-white pr-6 pl-2 py-2 rounded-full shadow-2xl flex items-center gap-4 transition-all duration-500 z-50 border border-slate-700 ${isPlaying ? 'translate-y-0 opacity-100' : 'translate-y-24 opacity-0'}`}>
+                        <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-[#4384a6] rounded-full flex items-center justify-center hover:scale-105 transition-transform">{isPlaying ? <Pause size={18} fill="white" /> : <Play size={18} fill="white" />}</button>
+                        <div className="flex flex-col min-w-[120px]"><span className="text-[10px] text-slate-400 font-mono leading-none mb-1">正在播放</span><span className="text-sm font-bold truncate max-w-[150px]">{SONGS.find(s => s.id === currentTrack)?.title}</span></div>
+                        <div className="h-4 w-[1px] bg-slate-700 mx-2" /><Activity size={16} className={`text-[#4384a6] ${isPlaying ? 'animate-pulse' : 'opacity-50'}`} />
+                    </div>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
